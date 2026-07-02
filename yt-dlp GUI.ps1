@@ -1,293 +1,355 @@
-Add-Type -AssemblyName Microsoft.VisualBasic
 Add-Type -AssemblyName System.Windows.Forms
+Add-Type -AssemblyName System.Drawing
 
-function Install-Ffmpeg {
-    Clear-Host
-    Write-Host "===========================" -ForegroundColor Green
-    Write-Host "      Instalando ffmpeg     " -ForegroundColor Green
-    Write-Host "===========================" -ForegroundColor Green
-    $downloadUrl = "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip"
-    $destinationPath = "$([environment]::GetFolderPath('MyDocuments'))\ffmpeg-release-essentials.zip"
-    $extractPath = "$([environment]::GetFolderPath('MyDocuments'))\ffmpeg"
+# =========================
+# FORM
+# =========================
+$form = New-Object System.Windows.Forms.Form
+$form.Text = "yt-dlp GUI PRO"
+$form.Size = New-Object System.Drawing.Size(850, 650)
+$form.StartPosition = "CenterScreen"
+$form.Font = New-Object System.Drawing.Font("Segoe UI", 9)
 
-    Write-Host "Descargando ffmpeg desde $downloadUrl ..." -ForegroundColor Yellow
+# =========================
+# LOG
+# =========================
+$log = New-Object System.Windows.Forms.RichTextBox
+$log.Size = New-Object System.Drawing.Size(810, 240)
+$log.Location = New-Object System.Drawing.Point(10, 300)
+$log.ReadOnly = $true
+$log.BackColor = "Black"
+$log.ForeColor = "White"
+$log.Font = New-Object System.Drawing.Font("Segoe UI Emoji", 9)
+$form.Controls.Add($log)
+
+function Write-Log {
+    param($text, $color="White")
+
+    $log.SelectionStart = $log.Text.Length
+    $log.SelectionColor = $color
+    $log.AppendText("$text`r`n")
+    $log.ScrollToCaret()
+}
+
+# =========================
+# URL
+# =========================
+$form.Controls.Add((New-Object System.Windows.Forms.Label -Property @{
+    Text="URL:"
+    Location=New-Object System.Drawing.Point(10, 20)
+    AutoSize=$true
+}))
+
+$textUrl = New-Object System.Windows.Forms.TextBox
+$textUrl.Location = New-Object System.Drawing.Point(70, 18)
+$textUrl.Size = New-Object System.Drawing.Size(470, 22)
+$form.Controls.Add($textUrl)
+
+# =========================
+# PASTE URL
+# =========================
+$btnPaste = New-Object System.Windows.Forms.Button
+$btnPaste.Text = "Pegar URL"
+$btnPaste.Location = New-Object System.Drawing.Point(550, 15)
+$btnPaste.Size = New-Object System.Drawing.Size(90, 28)
+$form.Controls.Add($btnPaste)
+
+$btnPaste.Add_Click({
     try {
-        Invoke-WebRequest -Uri $downloadUrl -OutFile $destinationPath -UseBasicParsing -TimeoutSec 3600
-        Write-Host "Descarga completada." -ForegroundColor Green
+        $textUrl.Text = [System.Windows.Forms.Clipboard]::GetText()
+        Write-Log "📋 URL pegada" Cyan
     } catch {
-        Write-Host "Error durante la descarga: $_" -ForegroundColor Red
-        Write-Host "Presiona cualquier tecla para continuar..." -ForegroundColor Yellow
-        $x = $host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
-        Show-Menu
-        return
+        Write-Log "❌ Clipboard vacío" Red
     }
+})
 
-    if (-not (Test-Path $destinationPath) -or (Get-Item $destinationPath).Length -eq 0) {
-        Write-Host "Error: La descarga fallo o el archivo esta vacio." -ForegroundColor Red
-        Write-Host "Presiona cualquier tecla para continuar..." -ForegroundColor Yellow
-        $x = $host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
-        Show-Menu
-        return
+# =========================
+# COOKIES
+# =========================
+$cookiePath = ""
+
+$btnCookies = New-Object System.Windows.Forms.Button
+$btnCookies.Text = "Cookies"
+$btnCookies.Location = New-Object System.Drawing.Point(650, 15)
+$btnCookies.Size = New-Object System.Drawing.Size(90, 28)
+$form.Controls.Add($btnCookies)
+
+$btnCookies.Add_Click({
+    $dlg = New-Object System.Windows.Forms.OpenFileDialog
+    $dlg.Filter = "TXT (*.txt)|*.txt|All (*.*)|*.*"
+    if ($dlg.ShowDialog() -eq "OK") {
+        $script:cookiePath = $dlg.FileName
+        Write-Log "🍪 Cookies cargadas" Yellow
+        Write-Log "📁 $cookiePath" Gray
+        Refresh-Cmd
     }
+})
 
-    Write-Host "Descomprimiendo ffmpeg en $extractPath ..."  -ForegroundColor Green
-    Expand-Archive -Path $destinationPath -DestinationPath $extractPath -Force
+# =========================
+# INPUTS
+# =========================
+$form.Controls.Add((New-Object System.Windows.Forms.Label -Property @{
+    Text="Formato:"
+    Location=New-Object System.Drawing.Point(10, 55)
+    AutoSize=$true
+}))
 
-    $binPath = Get-ChildItem -Path "$extractPath\ffmpeg-*" -Recurse -Directory | Where-Object { $_.Name -eq "bin" }
+$textFormat = New-Object System.Windows.Forms.TextBox
+$textFormat.Location = New-Object System.Drawing.Point(80, 52)
+$textFormat.Size = New-Object System.Drawing.Size(200, 22)
+$textFormat.Text = "bestvideo+bestaudio"
+$form.Controls.Add($textFormat)
 
-    if (-not $binPath) {
-        Write-Host "Error: No se encontro la carpeta esperada despues de la descompresion." -ForegroundColor Red
-        Write-Host "Presiona cualquier tecla para continuar..." -ForegroundColor Yellow
-        $x = $host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
-        Show-Menu
-        return
+$form.Controls.Add((New-Object System.Windows.Forms.Label -Property @{
+    Text="Subs:"
+    Location=New-Object System.Drawing.Point(300, 55)
+    AutoSize=$true
+}))
+
+$textSub = New-Object System.Windows.Forms.TextBox
+$textSub.Location = New-Object System.Drawing.Point(350, 52)
+$textSub.Size = New-Object System.Drawing.Size(80, 22)
+$form.Controls.Add($textSub)
+
+# =========================
+# VERSION INFO (2 LINEAS ORDENADAS)
+# =========================
+
+$lblYtDlp = New-Object System.Windows.Forms.Label
+$lblYtDlp.Location = New-Object System.Drawing.Point(10, 85)
+$lblYtDlp.Size = New-Object System.Drawing.Size(820, 18)
+$lblYtDlp.ForeColor = "DarkGreen"
+$form.Controls.Add($lblYtDlp)
+
+$lblFfmpeg = New-Object System.Windows.Forms.Label
+$lblFfmpeg.Location = New-Object System.Drawing.Point(10, 105)
+$lblFfmpeg.Size = New-Object System.Drawing.Size(820, 18)
+$lblFfmpeg.ForeColor = "DarkGreen"
+$form.Controls.Add($lblFfmpeg)
+
+try {
+    $lblYtDlp.Text = "yt-dlp: " + (& yt-dlp --version)
+} catch {
+    $lblYtDlp.Text = "yt-dlp: no detectado"
+}
+
+try {
+    $lblFfmpeg.Text = "ffmpeg: " + (& ffmpeg -version 2>$null | Select-Object -First 1)
+} catch {
+    $lblFfmpeg.Text = "ffmpeg: no detectado"
+}
+
+# =========================
+# CMD CENTRAL (CLICK COPY)
+# =========================
+$lblCmd = New-Object System.Windows.Forms.Label
+$lblCmd.Location = New-Object System.Drawing.Point(10, 125)
+$lblCmd.Size = New-Object System.Drawing.Size(810, 30)
+$lblCmd.TextAlign = "MiddleCenter"   # 🔥 CENTRADO
+$lblCmd.ForeColor = "DarkBlue"
+$lblCmd.BorderStyle = "FixedSingle"
+$form.Controls.Add($lblCmd)
+
+$lblCmd.Add_Click({
+    [System.Windows.Forms.Clipboard]::SetText($lblCmd.Text)
+    Write-Log "📋 CMD principal copiado" Cyan
+})
+
+function Refresh-Cmd {
+    $cmd = "yt-dlp"
+    if ($cookiePath) {
+        $cmd += " --cookies `"$cookiePath`""
     }
+    if ($textFormat.Text) { $cmd += " -f $($textFormat.Text)" }
+    if ($textSub.Text) { $cmd += " --write-subs --embed-subs --sub-lang $($textSub.Text)" }
+    if ($textUrl.Text) { $cmd += " `"$($textUrl.Text)`""
+    }
+    if ($cookieEnabled) {
+        $lblCmd.Text = "🍪 cookies activadas | " + $cmd
+    } else {
+        $lblCmd.Text = $cmd
+    }
+}
 
+# =========================
+# COMANDOS COPIABLES
+# =========================
+$lblFormatsCmd = New-Object System.Windows.Forms.Label
+$lblFormatsCmd.Location = New-Object System.Drawing.Point(10, 160)
+$lblFormatsCmd.Size = New-Object System.Drawing.Size(810, 20)
+$lblFormatsCmd.ForeColor = "Black"
+$lblFormatsCmd.BorderStyle = "FixedSingle"
+$form.Controls.Add($lblFormatsCmd)
+
+$lblSubsCmd = New-Object System.Windows.Forms.Label
+$lblSubsCmd.Location = New-Object System.Drawing.Point(10, 185)
+$lblSubsCmd.Size = New-Object System.Drawing.Size(810, 20)
+$lblSubsCmd.ForeColor = "Black"
+$lblSubsCmd.BorderStyle = "FixedSingle"
+$form.Controls.Add($lblSubsCmd)
+
+$lblAudioCmd = New-Object System.Windows.Forms.Label
+$lblAudioCmd.Location = New-Object System.Drawing.Point(10, 210)
+$lblAudioCmd.Size = New-Object System.Drawing.Size(810, 20)
+$lblAudioCmd.ForeColor = "Black"
+$lblAudioCmd.BorderStyle = "FixedSingle"
+$form.Controls.Add($lblAudioCmd)
+
+$lblDownloadSubCmd = New-Object System.Windows.Forms.Label
+$lblDownloadSubCmd.Location = New-Object System.Drawing.Point(10, 235)
+$lblDownloadSubCmd.Size = New-Object System.Drawing.Size(810, 20)
+$lblDownloadSubCmd.ForeColor = "Black"
+$lblDownloadSubCmd.BorderStyle = "FixedSingle"
+$form.Controls.Add($lblDownloadSubCmd)
+
+function Refresh-ExtraCmds {
+
+    if ($textUrl.Text) {
+        $lblFormatsCmd.Text = "Listar Formato de video: yt-dlp -F `"$($textUrl.Text)`""
+        $lblSubsCmd.Text = "Listar Formato de Subtitulos: yt-dlp --list-subs `"$($textUrl.Text)`""
+        $lblAudioCmd.Text = "Descargar solo audio (mp3): yt-dlp -x --audio-format mp3 `"$($textUrl.Text)`""
+        $lblDownloadSubCmd.Text = "Descargar solo subtítulo: yt-dlp --write-subs --sub-lang <Formato del subtitulo> `"$($textUrl.Text)`""
+    } else {
+        $lblFormatsCmd.Text = "Listar Formato de video: yt-dlp -F <url>"
+        $lblSubsCmd.Text = "Listar Formato de Subtitulos: yt-dlp --list-subs <url>"
+		$lblAudioCmd.Text = "Descargar solo audio (mp3): yt-dlp -x --audio-format mp3 <url>"
+        $lblDownloadSubCmd.Text = "Descargar solo subtítulo: yt-dlp --write-subs --sub-lang <Formato del subtitulo> <url>"
+    }
+}
+
+$lblFormatsCmd.Add_Click({
+    if ($textUrl.Text) {
+        $cmd = "yt-dlp -F `"$($textUrl.Text)`""
+        [System.Windows.Forms.Clipboard]::SetText($cmd)
+        Write-Log "📋 comando formatos copiado" Cyan
+    } else {
+        Write-Log "❌ URL vacía" Red
+    }
+})
+
+$lblSubsCmd.Add_Click({
+    if ($textUrl.Text) {
+        $cmd = "yt-dlp --list-subs `"$($textUrl.Text)`""
+        [System.Windows.Forms.Clipboard]::SetText($cmd)
+        Write-Log "📋 comando subs copiado" Cyan
+    } else {
+        Write-Log "❌ URL vacía" Red
+    }
+})
+
+$lblAudioCmd.Add_Click({
+    if ($textUrl.Text) {
+        $cmd = "yt-dlp -x --audio-format mp3 `"$($textUrl.Text)`""
+        [System.Windows.Forms.Clipboard]::SetText($cmd)
+        Write-Log "📋 audio copiado" Cyan
+    } else {
+        Write-Log "❌ URL vacía" Red
+    }
+})
+
+$lblDownloadSubCmd.Add_Click({
+    if ($textUrl.Text) {
+        $cmd = "yt-dlp --write-subs --sub-lang <Formato del subtitulo> `"$($textUrl.Text)`""
+        [System.Windows.Forms.Clipboard]::SetText($cmd)
+        Write-Log "📋 subtítulo copiado" Cyan
+    } else {
+        Write-Log "❌ URL vacía" Red
+    }
+})
+
+# =========================
+# BOTONES
+# =========================
+$btnFormats = New-Object System.Windows.Forms.Button
+$btnFormats.Text = "Formatos"
+$btnFormats.Location = New-Object System.Drawing.Point(120, 257)
+$btnFormats.Size = New-Object System.Drawing.Size(120, 30)
+$form.Controls.Add($btnFormats)
+
+$btnSubs = New-Object System.Windows.Forms.Button
+$btnSubs.Text = "Subs"
+$btnSubs.Location = New-Object System.Drawing.Point(250, 257)
+$btnSubs.Size = New-Object System.Drawing.Size(120, 30)
+$form.Controls.Add($btnSubs)
+
+$btnDownload = New-Object System.Windows.Forms.Button
+$btnDownload.Text = "Descargar"
+$btnDownload.Location = New-Object System.Drawing.Point(380, 257)
+$btnDownload.Size = New-Object System.Drawing.Size(120, 30)
+$form.Controls.Add($btnDownload)
+
+$btnClear = New-Object System.Windows.Forms.Button
+$btnClear.Text = "Limpiar log"
+$btnClear.Location = New-Object System.Drawing.Point(510, 257)
+$btnClear.Size = New-Object System.Drawing.Size(120, 30)
+$form.Controls.Add($btnClear)
+
+$btnClear.Add_Click({ $log.Clear() })
+
+# =========================
+# ACTIONS
+# =========================
+$btnFormats.Add_Click({
+    if (-not $textUrl.Text) { Write-Log "❌ URL vacía" Red; return }
+
+    Write-Log "🎬 Listando formatos..." Cyan
+    $args = @()
+    if ($cookiePath) { $args += "--cookies"; $args += $cookiePath }
+    $args += "-F"
+    $args += $textUrl.Text
+
+    $out = & yt-dlp.exe @args 2>&1
+    $out | ForEach-Object { Write-Log $_ White }
+
+    Write-Log "✔ listo" Green
+})
+
+$btnSubs.Add_Click({
+    if (-not $textUrl.Text) { Write-Log "❌ URL vacía" Red; return }
+
+    Write-Log "📝 Listando subs..." Cyan
+    $args = @()
+    if ($cookiePath) { $args += "--cookies"; $args += $cookiePath }
+    $args += "--list-subs"
+    $args += $textUrl.Text
+
+    $out = & yt-dlp.exe @args 2>&1
+    $out | ForEach-Object { Write-Log $_ Gray }
+
+    Write-Log "✔ listo" Green
+})
+
+$btnDownload.Add_Click({
     try {
-        $env:Path += ";$($binPath.FullName)"
-        [System.Environment]::SetEnvironmentVariable("Path", $env:Path, [System.EnvironmentVariableTarget]::User)
-        Write-Host "ffmpeg instalado y anadido al PATH del sistema." -ForegroundColor Green
+        Write-Log "⬇ descargando..." Cyan
+
+        $args = @()
+        if ($cookiePath) { $args += "--cookies"; $args += $cookiePath }
+        if ($textFormat.Text) { $args += "-f"; $args += $textFormat.Text }
+        if ($textSub.Text) { $args += "--write-subs"; $args += "--embed-subs"; $args += "--sub-lang"; $args += $textSub.Text }
+
+        $args += $textUrl.Text
+
+        Start-Process yt-dlp -ArgumentList $args -NoNewWindow -Wait
+
+        Write-Log "✔ terminado" Green
     } catch {
-        Write-Host "Hubo un error al anadir ffmpeg al PATH: $_" -ForegroundColor Red
+        Write-Log $_.Exception.Message Red
     }
+})
 
-    Write-Host "Presiona cualquier tecla para continuar..." -ForegroundColor Yellow
-    $x = $host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
-    Show-Menu
-}
+# =========================
+# TIMER
+# =========================
+$timer = New-Object System.Windows.Forms.Timer
+$timer.Interval = 300
+$timer.Add_Tick({
+    Refresh-Cmd
+    Refresh-ExtraCmds
+})
+$timer.Start()
 
+Refresh-Cmd
+Refresh-ExtraCmds
 
-function Show-FileDialog {
-    $fileDialog = New-Object System.Windows.Forms.OpenFileDialog
-    $fileDialog.Filter = "Archivos de texto (*.txt)|*.txt|Todos los archivos (*.*)|*.*"
-    $fileDialog.Title = "Seleccionar archivo de cookies"
-    if ($fileDialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
-        return $fileDialog.FileName
-    }
-    return $null
-}
-
-function Show-Menu {
-    $url = ""
-    $format = "bestvideo+bestaudio"
-    $subtitlesOption = ""
-    $cookiesFile = ""
-    $dynamicCommand = "(Pendiente)"
-
-    while ($true) {
-        # Actualizar el código dinámico basado en las opciones ingresadas
-        if ($url -and $format) {
-            $dynamicCommand = "yt-dlp.exe"
-            if ($cookiesFile) {
-                $dynamicCommand += " --cookies $cookiesFile"
-            }
-            $dynamicCommand += " -f $format $subtitlesOption $url"
-        } else {
-            $dynamicCommand = "(Pendiente)"
-        }
-
-        Clear-Host
-        Write-Host "===========================" -ForegroundColor Green
-        Write-Host "        Menu Principal       " -ForegroundColor Green
-        Write-Host "===========================" -ForegroundColor Green
-
-        # Mostrar versión de yt-dlp
-        try {
-            $ytDlpVersion = (yt-dlp --version 2>$null).ToString()
-            Write-Host "yt-dlp version: $ytDlpVersion" -ForegroundColor Cyan
-        } catch {
-            Write-Host "yt-dlp no esta instalado o no se pudo verificar la version." -ForegroundColor Red
-        }
-
-        # Mostrar versión de ffmpeg
-        try {
-            $ffmpegVersion = (ffmpeg -version 2>$null | Select-String "ffmpeg version").ToString()
-            if ($ffmpegVersion) {
-                $ffmpegVersion = $ffmpegVersion -replace "^ffmpeg version ([\d\.]+).*", '$1'
-                Write-Host "ffmpeg version: $ffmpegVersion" -ForegroundColor Cyan
-            } else {
-                Write-Host "ffmpeg no esta instalado o no se pudo verificar la version." -ForegroundColor Red
-            }
-        } catch {
-            Write-Host "ffmpeg no esta instalado o no se pudo verificar la version." -ForegroundColor Red
-        }
-
-        Write-Host "===========================" -ForegroundColor Green
-        Write-Host "Codigo dinamico: " -ForegroundColor Yellow -NoNewline
-        Write-Host "$dynamicCommand" -ForegroundColor Cyan
-        Write-Host "===========================" -ForegroundColor Green
-
-        Write-Host "0. Agregar cookies: " -ForegroundColor Yellow -NoNewline
-        if ($cookiesFile) {
-            Write-Host "$cookiesFile" -ForegroundColor Cyan
-        } else {
-            Write-Host "(Pendiente)" -ForegroundColor DarkGray
-        }
-
-        Write-Host "1. Ingresar la URL del video: " -ForegroundColor Yellow -NoNewline
-        if ($url) {
-            Write-Host "$url" -ForegroundColor Cyan
-        } else {
-            Write-Host "(Pendiente)" -ForegroundColor DarkGray
-        }
-
-        Write-Host "2. Ingresar formato: " -ForegroundColor Yellow -NoNewline
-        if ($format) {
-            Write-Host "$format" -ForegroundColor Cyan
-        } else {
-            Write-Host "(Pendiente)" -ForegroundColor DarkGray
-        }
-
-        Write-Host "3. Ingresar subtitulo del video: " -ForegroundColor Yellow -NoNewline
-        if ($subtitlesOption) {
-            Write-Host "$subtitlesOption" -ForegroundColor Cyan
-        } else {
-            Write-Host "(Pendiente)" -ForegroundColor DarkGray
-        }
-
-        Write-Host "4. Iniciar descarga" -ForegroundColor Yellow
-        Write-Host "5. Instalar ffmpeg" -ForegroundColor Yellow
-        Write-Host "6. Salir" -ForegroundColor Yellow
-        Write-Host "===========================" -ForegroundColor Green
-        Write-Host "Selecciona una opcion:" -ForegroundColor Yellow
-        $option = Read-Host
-
-        switch ($option) {
-            "0" {
-                Clear-Host
-                Write-Host "===========================" -ForegroundColor Green
-                Write-Host "      Agregar Cookies       " -ForegroundColor Green
-                Write-Host "===========================" -ForegroundColor Green
-                
-                $selectedFile = Show-FileDialog
-                if ($selectedFile) {
-                    $cookiesFile = $selectedFile
-                    Write-Host "Archivo de cookies seleccionado: $cookiesFile" -ForegroundColor Green
-                } else {
-                    Write-Host "No se selecciono ningun archivo de cookies." -ForegroundColor DarkGray
-                }
-
-                Write-Host "Presiona cualquier tecla para continuar..." -ForegroundColor Yellow
-                $x = $host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
-            }
-            "1" {
-                $url = [Microsoft.VisualBasic.Interaction]::InputBox("Ingresa la URL del video:", "Ingresar URL", "")
-                if (-not $url) {
-                    Write-Host "No se ingreso ninguna URL, intenta de nuevo." -ForegroundColor Red
-                } else {
-                    Write-Host "URL ingresada: $url" -ForegroundColor Green
-                }
-            }
-            "2" {
-                if (-not $url) {
-                    Write-Host "Primero debes ingresar una URL en la opcion 1." -ForegroundColor Red
-                    Write-Host "Presiona cualquier tecla para continuar..." -ForegroundColor Yellow
-                    $x = $host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
-                    continue
-                }
-
-                Clear-Host
-                Write-Host "===========================" -ForegroundColor Green
-                Write-Host "    Ingresar Formato del video   " -ForegroundColor Green
-                Write-Host "===========================" -ForegroundColor Green
-
-                try {
-                    $cmd = "yt-dlp.exe"
-                    if ($cookiesFile) {
-                        $cmd += " --cookies $cookiesFile"
-                    }
-                    $cmd += " -F $url"
-                    Invoke-Expression $cmd
-                } catch {
-                    Write-Host "Error al listar formatos, verifica la URL o conexion a internet." -ForegroundColor Red
-                    continue
-                }
-
-                Write-Host "Ingresa el nombre completo del formato o deja en blanco para usar el mejor video y audio combinados:" -ForegroundColor Yellow
-                $format = Read-Host
-
-                if ([string]::IsNullOrEmpty($format)) {
-                    $format = "bestvideo+bestaudio"
-                }
-
-                Write-Host "Formato seleccionado: $format" -ForegroundColor Green
-                Write-Host "Presiona cualquier tecla para continuar..." -ForegroundColor Yellow
-                $x = $host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
-            }
-            "3" {
-                if (-not $url) {
-                    Write-Host "Primero debes ingresar una URL en la opcion 1." -ForegroundColor Red
-                    Write-Host "Presiona cualquier tecla para continuar..." -ForegroundColor Yellow
-                    $x = $host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
-                    continue
-                }
-
-                Clear-Host
-                Write-Host "===========================" -ForegroundColor Green
-                Write-Host "   Subtitulos Disponibles   " -ForegroundColor Magenta
-                Write-Host "===========================" -ForegroundColor Green
-
-                try {
-                    $cmd = "yt-dlp.exe"
-                    if ($cookiesFile) {
-                        $cmd += " --cookies $cookiesFile"
-                    }
-                    $cmd += " --list-subs $url"
-                    Invoke-Expression $cmd
-                } catch {
-                    Write-Host "Error al listar subtitulos, verifica la URL o conexion a internet." -ForegroundColor Red
-                    continue
-                }
-
-                Write-Host "Ingresa el codigo de idioma de los subtitulos (por ejemplo, 'es' para espanol, 'en' para ingles):" -ForegroundColor Magenta
-                $subOption = Read-Host
-
-                if ([string]::IsNullOrEmpty($subOption)) {
-                    Write-Host "No se seleccionaron subtitulos." -ForegroundColor DarkGray
-                } else {
-                    $subtitlesOption = "--write-subs --embed-subs --sub-lang $subOption"
-                    Write-Host "Subtitulo seleccionado: $subOption" -ForegroundColor Green
-                }
-
-                Write-Host "Presiona cualquier tecla para continuar..." -ForegroundColor Yellow
-                $x = $host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
-            }
-            "4" {
-                if (-not $url -or -not $format) {
-                    Write-Host "Primero debes ingresar una URL y un formato." -ForegroundColor Red
-                    continue
-                }
-
-                Clear-Host
-                Write-Host "===========================" -ForegroundColor Green
-                Write-Host "  Iniciando Descarga  " -ForegroundColor Cyan
-                Write-Host "===========================" -ForegroundColor Green
-
-                try {
-                    Write-Host "Ejecutando: $dynamicCommand" -ForegroundColor Cyan
-                    Invoke-Expression $dynamicCommand
-                    Write-Host "Descarga completada." -ForegroundColor Green
-                } catch {
-                    Write-Host "Hubo un error al descargar el video." -ForegroundColor Red
-                }
-
-                Write-Host "Presiona cualquier tecla para continuar..." -ForegroundColor Yellow
-                $x = $host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
-            }
-            "5" {
-                Install-Ffmpeg
-            }
-            "6" {
-                Exit
-            }
-            default {
-                Write-Host "Opcion no valida, intentalo de nuevo." -ForegroundColor Red
-                Write-Host "Presiona cualquier tecla para continuar..." -ForegroundColor Yellow
-                $x = $host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
-            }
-        }
-    }
-}
-
-# Mostrar el menu principal
-Show-Menu
+[void]$form.ShowDialog()
