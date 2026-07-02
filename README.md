@@ -1,24 +1,41 @@
 # Video Downloader con yt-dlp y PowerShell
 
-**Última Actualización:** 04 de marzo de 2025
+**Última Actualización:** 02 de julio de 2026
 
 ![Interfaz Gráfica del Script](GUI.png)
 
 ## Descripción
 
-Este es un script de PowerShell que facilita la instalación de `ffmpeg`, la gestión de descargas de videos con `yt-dlp`, y permite seleccionar formatos, subtítulos y cookies.
+GUI en PowerShell para usar **yt-dlp** de forma fácil, rápida y visual, sin necesidad de escribir comandos manualmente.
 
-## 📌 Características  
-- Descarga e instalación automática de `ffmpeg`.  
-- Soporte para `yt-dlp` con selección de formatos.  
-- Posibilidad de agregar cookies para descargas autenticadas.  
-- Interfaz interactiva con menú en consola. 
+---
 
-## 🚀 Requisitos
+## 🚀 Características
 
-- Windows con PowerShell instalado.
-- [yt-dlp](https://pypi.org/project/yt-dlp/) instalado con python.
-- [7-Zip](https://www.7-zip.org/) para descomprimir `ffmpeg`.
+- 🎬 Descargar videos con calidad personalizable
+- 🎧 Extraer audio en MP3 automáticamente
+- 📝 Descargar subtítulos (manuales y automáticos)
+- 🌐 Soporte para múltiples idiomas de subtítulos
+- 🍪 Soporte para cookies (videos privados o con login)
+- 📋 Comandos dinámicos copiables con un click
+- 📊 Log en tiempo real dentro de la interfaz
+- ⚡ Interfaz ligera (WinForms + PowerShell)
+
+---
+
+## 📦 Requisitos (RECOMENDADO)
+
+Instala todo con **winget**:
+
+```
+winget install yt-dlp.yt-dlp
+```
+
+```
+winget install Gyan.FFmpeg
+```
+
+---
 
 ## 📖 Uso
 
